@@ -1,0 +1,132 @@
+version: "3.8"
+
+services:
+  # ZooKeeper (Kafka için gerekli)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZK_SERVER_HEAP: "-Xmx256M -Xms256M"
+    ports:
+      - "52181:2181"
+    restart: unless-stopped
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+
+  # Kafka Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka-broker
+    depends_on:
+      - zookeeper
+    ports:
+      # Host (local makine) -> Kafka erişimi
+      - "59092:59092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+
+      # 2 listener:
+      # - container içi: kafka:9092
+      # - host üstünden: localhost:59092
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:59092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:59092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    restart: unless-stopped
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  # Debezium Kafka Connect (Quay.io + sürüm sabit)
+  kafka_connect:
+    image: quay.io/debezium/connect:3.4
+    container_name: kafka_connect
+    depends_on:
+      - kafka
+      - db
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: "kafka:9092"
+      GROUP_ID: "medium_debezium"
+      CONFIG_STORAGE_TOPIC: "my_connect_configs"
+      OFFSET_STORAGE_TOPIC: "my_connect_offsets"
+      STATUS_STORAGE_TOPIC: "my_connect_statuses"
+
+      # Tek broker olduğu için internal topic replication factor'lerini 1 yap
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+
+      # Converter'lar
+      KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+
+      REST_ADVERTISED_HOST_NAME: "kafka_connect"
+    restart: unless-stopped
+
+  # Kafka UI (kümeyi izlemek/yönetmek için)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+      - zookeeper
+    ports:
+      - "9091:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "local"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:9092"
+      KAFKA_CLUSTERS_0_ZOOKEEPER: "zookeeper:2181"
+    restart: unless-stopped
+
+  # PostgreSQL (17'ye sabit)
+  db:
+    image: postgres:17
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pass
+      # POSTGRES_DB: mydb
+    ports:
+      - "5433:5432"   # host:container  (host'ta 5432 doluysa 5433 kullan)
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_replication_slots=10"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - postgres_data:/var/lib/postgresql/data
+
+  # DB yönetim arayüzü
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "8001:8080"
+
+volumes:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
+  postgres_data:

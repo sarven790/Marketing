@@ -1,0 +1,5 @@
+package com.example.notificationservice.domain.model.enums;
+
+public enum EventType {
+    STOCK_REPLENISHED,STOCK_DEPLETED
+}
