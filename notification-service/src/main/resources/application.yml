@@ -1,0 +1,31 @@
+spring:
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+  application:
+    name: notification-service
+  datasource:
+    url: jdbc:postgresql://localhost:5433/stock_db
+    username: postgres
+    password: pass
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: 'false'
+    hibernate:
+      ddl-auto: update
+
+kafka:
+  topic:
+    name: stock-updated
+  delete-topic:
+    name: delete-process-byId-from-outbox
+  brokers: localhost:59092
+
+server:
+  port: 8081
+
+slack-bot:
+  channel-id: ${CHANNEL_ID}
+  oauth-token: ${OAUTH_TOKEN}
