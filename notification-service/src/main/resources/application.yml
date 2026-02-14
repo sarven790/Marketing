@@ -27,5 +27,5 @@ server:
   port: 8081
 
 slack-bot:
-  channel-id: C09KZEACBSR
-  oauth-token: xoxb-9679486118325-9702212045249-AL1wdPuxqjJG6moC0ZQArXv5
+  channel-id: ${CHANNEL_ID}
+  oauth-token: ${OAUTH_TOKEN}
