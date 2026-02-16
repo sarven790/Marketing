@@ -2,9 +2,11 @@ package com.example.notificationservice.common.kafka.consumer;
 
 import com.example.notificationservice.domain.mapper.SlackMapper;
 import com.example.notificationservice.domain.model.KafkaPayload;
+import com.example.notificationservice.domain.model.enums.ProcessDecision;
 import com.example.notificationservice.domain.model.input.EventProcessInput;
 import com.example.notificationservice.domain.service.EventProcessService;
 import com.example.notificationservice.domain.service.NotificationService;
+import com.example.notificationservice.domain.util.EventProcessValidateUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,12 +39,34 @@ public class KafkaConsumer {
         KafkaPayload kafkaPayload = MAPPER.readValue(payload.get("payload").asText(), KafkaPayload.class);
         log.info("KafkaConsumer -> listener - kafkaPayload {}",kafkaPayload);
 
-        var isExist = eventIdIsExist(kafkaPayload.getEventId());
+        // - İlk kez geliyorsa: PENDING kaydı oluştur (atomik)
+        // - Daha önce geldiyse: status'a göre karar ver
+        var decision = eventProcessService.tryStart(EventProcessInput.builder()
+                .eventId(kafkaPayload.getEventId())
+                .consumer("notification-service")
+                .build()).getProcessDecision();
 
-        if (!isExist) {
-            saveEventId(kafkaPayload.getEventId());
+        if (EventProcessValidateUtil.decisionIsEqualsToSkipAlreadySent(decision)) {
+            log.info("Event already SENT. Skipping. eventId={}", kafkaPayload.getEventId());
+            return;
+        }
+
+        if (EventProcessValidateUtil.decisionIsEqualsToSkipInProgress(decision)) {
+            // Aynı event paralel işleniyor olabilir (veya önceki attempt yarım kaldı)
+            log.info("Event is still PENDING. Skipping for now. eventId={}", kafkaPayload.getEventId());
+            return;
+        }
+
+        try {
             notificationService.sendSlack(SlackMapper.toInput(kafkaPayload));
+            eventProcessService.markSent(EventProcessInput.builder()
+                    .eventId(kafkaPayload.getEventId())
+                    .build());
             deleteByProcessId(kafkaPayload.getEventId());
+        } catch (Exception e) {
+            eventProcessService.markFailed(EventProcessInput.builder()
+                    .eventId(kafkaPayload.getEventId())
+                    .build(),e);
         }
 
     }
@@ -50,19 +74,6 @@ public class KafkaConsumer {
     private void deleteByProcessId(String id) {
         eventProcessService.deleteByProcessId(EventProcessInput.builder()
                 .eventId(id)
-                .build());
-    }
-
-    private Boolean eventIdIsExist(String eventId) {
-        var eventProcessOutput = eventProcessService.eventProcessExist(EventProcessInput.builder()
-                .eventId(eventId)
-                .build());
-        return eventProcessOutput.getIsExist();
-    }
-
-    private void saveEventId(String eventId) {
-        eventProcessService.addEventProcess(EventProcessInput.builder()
-                .eventId(eventId)
                 .build());
     }
 

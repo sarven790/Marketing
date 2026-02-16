@@ -5,8 +5,8 @@ import com.example.notificationservice.domain.model.output.EventProcessOutput;
 
 public interface EventProcessService {
 
-    EventProcessOutput eventProcessExist(EventProcessInput input);
-    void addEventProcess(EventProcessInput input);
     void deleteByProcessId(EventProcessInput input);
-
+    EventProcessOutput tryStart(EventProcessInput input);
+    void markSent(EventProcessInput input);
+    void markFailed(EventProcessInput input, Exception ex);
 }

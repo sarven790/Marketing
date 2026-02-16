@@ -7,4 +7,5 @@ import lombok.Data;
 @Builder
 public class EventProcessInput {
     private String eventId;
+    private String consumer;
 }
