@@ -8,7 +8,7 @@ The goal is to send a **Slack alert** when a product’s stock transitions from 
 
 ![Flow Diagram](artifacture.png)
 
----
+
 
 ## Services
 
@@ -22,7 +22,7 @@ The goal is to send a **Slack alert** when a product’s stock transitions from 
 - Applies **idempotency + status-based processing**.
 - Sends a Slack notification only when appropriate.
 
----
+
 
 ## High-level Architecture
 
@@ -32,7 +32,7 @@ The goal is to send a **Slack alert** when a product’s stock transitions from 
 4. `notification-service` consumes the Kafka message, runs idempotent checks, and sends **Slack**  
 5. The event is tracked as processed (**PENDING / SENT / FAILED**) to prevent duplicates and support retries  
 
----
+
 
 ## Event Production Flow (stock-service)
 
@@ -65,7 +65,7 @@ An outbox record is written only if:
 
 > **Note:** Writing the outbox record in `beforeCommit` ensures the event is generated only when the DB transaction is about to commit successfully.
 
----
+
 
 ## AOP Implementation (stock-service)
 
